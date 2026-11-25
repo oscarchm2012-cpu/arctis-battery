@@ -275,16 +275,7 @@ mod win {
             if bt.detected {
                 bt.transport = Some("bluetooth".into());
             }
-            if bt.connection == "connected" {
-                return bt;
-            }
-            if force_full {
-                self.hid.allow_now();
-            }
-            match self.hid.read(&mut self.diag) {
-                Some(r) => crate::hid::to_state(r, bt.bluetooth),
-                None => bt,
-            }
+            crate::hid::prefer(bt, &mut self.hid, &mut self.diag, force_full)
         }
 
         fn read_bt(&mut self, force_full: bool) -> BatteryState {

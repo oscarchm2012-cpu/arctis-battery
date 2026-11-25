@@ -151,16 +151,6 @@ impl Monitor {
         } else {
             bt.connection = "notFound".into();
         }
-        if bt.connection == "connected" {
-            return bt;
-        }
-
-        if force_full {
-            self.hid.allow_now();
-        }
-        match self.hid.read(&mut self.diag) {
-            Some(r) => crate::hid::to_state(r, bt.bluetooth),
-            None => bt,
-        }
+        crate::hid::prefer(bt, &mut self.hid, &mut self.diag, force_full)
     }
 }

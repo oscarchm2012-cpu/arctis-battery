@@ -144,6 +144,24 @@ fn query(dev: &hidapi::HidDevice) -> Result<(bool, u8, bool), String> {
     Err("no status reply".into())
 }
 
+/// Picks the source to show. A Bluetooth connection wins only when it actually
+/// reports a percentage: Nova 3P/3X can be connected over Bluetooth and the
+/// dongle at the same time, and the OS often has no battery level for the
+/// Bluetooth link, while the dongle does.
+pub fn prefer(bt: BatteryState, hid: &mut HidSource, diag: &mut Diagnostics, force_full: bool) -> BatteryState {
+    if bt.connection == "connected" && bt.percent.is_some() {
+        return bt;
+    }
+    if force_full {
+        hid.allow_now();
+    }
+    match hid.read(diag) {
+        // Dongle reading, unless the headset is off on the dongle but connected over Bluetooth.
+        Some(r) if r.online || bt.connection != "connected" => to_state(r, bt.bluetooth),
+        _ => bt,
+    }
+}
+
 /// Battery state for a dongle reading (`bluetooth` = radio state to keep showing).
 pub fn to_state(r: HidReading, bluetooth: String) -> BatteryState {
     let mut st = BatteryState::initial();
