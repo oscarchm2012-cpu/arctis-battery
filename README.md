@@ -1,7 +1,18 @@
-# Arctis 3 Battery Monitor
+# Arctis Battery Monitor
 
-Windows 10/11 tray app showing the real battery level of **SteelSeries Arctis 3 Bluetooth**.
-Tauri 2 + React + TypeScript + Rust (Windows Bluetooth APIs).
+Tray / menu-bar app showing the real battery level of **SteelSeries Arctis 3 Bluetooth** and
+**Arctis Nova 3P / 3X Wireless** as a duck-headphones icon with the percentage.
+Tauri 2 + React + TypeScript + Rust.
+
+## Download
+
+**[Latest release](https://github.com/oscarchm2012-cpu/arctis-battery/releases/latest)**
+
+- Windows 10 / 11: [Arctis-Battery-Monitor-1.0.0-Windows-setup.exe](https://github.com/oscarchm2012-cpu/arctis-battery/releases/download/v1.0.0/Arctis-Battery-Monitor-1.0.0-Windows-setup.exe)
+- macOS 11+ (Apple Silicon and Intel): [Arctis-Battery-Monitor-1.0.0-macOS.dmg](https://github.com/oscarchm2012-cpu/arctis-battery/releases/download/v1.0.0/Arctis-Battery-Monitor-1.0.0-macOS.dmg)
+
+Not code-signed yet: on Windows click *More info → Run anyway* if SmartScreen appears; on macOS
+right-click the app → *Open* the first time.
 
 ## How the battery is read
 
