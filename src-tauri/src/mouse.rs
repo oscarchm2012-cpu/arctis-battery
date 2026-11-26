@@ -30,6 +30,9 @@ const WIRED: &[(u16, &str)] = &[
 ];
 
 const POLL: Duration = Duration::from_secs(60);
+/// Heartbeats per reading and the pause between them (~2.5 s in total).
+const HEARTBEATS: u32 = 6;
+const HEARTBEAT_GAP: Duration = Duration::from_millis(450);
 const RESCAN: Duration = Duration::from_secs(60);
 const BACKOFF_MIN: Duration = Duration::from_secs(120);
 const BACKOFF_MAX: Duration = Duration::from_secs(900);
@@ -55,19 +58,36 @@ pub struct MouseSource {
     pub status: String,
 }
 
-/// Finds the status frame in a feature-report buffer and returns the percent.
-/// Accepts `05 00 00 P …` (numbered) or `00 05 00 00 P …` (unnumbered).
+/// Finds the battery percent in a status feature report.
+///
+/// The frame is `[05] 00 00 P 01 xx 01 02 …` — P = percent, then a link-status
+/// block. Depending on the OS / report numbering the leading `05` and zeros
+/// shift by a byte (macOS returned `00 00 00 01 00 01 02` for report 05 and
+/// `00 00 00 00 01 00 01 02` for report 00), so P is located as the byte right
+/// before the `01 xx 01 02` block, preceded only by zeros.
+/// P = 0 means "link not ready" (mouse asleep / not yet polled) → None.
 pub fn parse_frame(data: &[u8]) -> Option<u8> {
-    let frame = match data {
-        [0x05, ..] => data,
-        [0x00, 0x05, ..] => &data[1..],
-        _ => return None,
+    let body = match data {
+        [0x05, rest @ ..] => rest,
+        [0x00, 0x05, rest @ ..] => rest,
+        _ => data,
     };
-    if frame.len() < 4 || frame[1] != 0 || frame[2] != 0 {
-        return None;
+    for i in 1..=4 {
+        if body.len() > i + 4
+            && body[..i].iter().all(|&b| b == 0)
+            && body[i + 1] == 0x01
+            && body[i + 3] == 0x01
+            && body[i + 4] == 0x02
+        {
+            let p = body[i];
+            return (1..=100).contains(&p).then_some(p);
+        }
     }
-    let p = frame[3];
-    (1..=100).contains(&p).then_some(p)
+    // Fallback: plain numbered frame without the status block.
+    if let [0x05, 0x00, 0x00, p, ..] = data {
+        return (1..=100).contains(p).then_some(*p);
+    }
+    None
 }
 
 fn hex(b: &[u8]) -> String {
@@ -162,38 +182,44 @@ impl MouseSource {
             Err(e) => return Query::Asleep { name, detail: format!("cannot open: {e}") },
         };
 
-        // 1. heartbeat poll
-        let mut poll = [0u8; 65];
-        poll[1] = 0xf7;
-        if let Err(e) = dev.send_feature_report(&poll) {
-            return Query::Asleep { name, detail: format!("poll failed: {e}") };
-        }
-        std::thread::sleep(Duration::from_millis(50));
-
-        // 2. status report: numbered 0x05 first, then unnumbered.
+        // The vendor driver sends the F7 heartbeat about once a second, and the
+        // receiver fills in the percent only once the mouse has answered the
+        // relayed request. A single poll + 50 ms read gave "00" (link not
+        // ready) on an AJ179 PRO, so send a short burst and read after each.
         let mut tried = vec![];
-        for id in [0x05u8, 0x00] {
-            let mut buf = [0u8; 65];
-            buf[0] = id;
-            match dev.get_feature_report(&mut buf) {
-                Ok(n) => {
-                    let data = &buf[..n.min(buf.len())];
-                    tried.push(format!("id {id:02x}: {}", hex(data)));
-                    if let Some(p) = parse_frame(data) {
-                        self.status = format!("{name}: {p}% (raw {})", hex(data));
-                        return Query::Reading(MouseState {
-                            name,
-                            percent: Some(p),
-                            charging,
-                            asleep: false,
-                            last_update: Some(crate::battery::now_ms()),
-                        });
+        for round in 0..HEARTBEATS {
+            let mut poll = [0u8; 65];
+            poll[1] = 0xf7;
+            if let Err(e) = dev.send_feature_report(&poll) {
+                return Query::Asleep { name, detail: format!("poll failed: {e}") };
+            }
+            std::thread::sleep(if round == 0 { Duration::from_millis(50) } else { HEARTBEAT_GAP });
+
+            // Status report: numbered 0x05 first, then unnumbered.
+            tried.clear();
+            for id in [0x05u8, 0x00] {
+                let mut buf = [0u8; 65];
+                buf[0] = id;
+                match dev.get_feature_report(&mut buf) {
+                    Ok(n) => {
+                        let data = &buf[..n.min(buf.len())];
+                        tried.push(format!("id {id:02x}: {}", hex(data)));
+                        if let Some(p) = parse_frame(data) {
+                            self.status = format!("{name}: {p}% after {} heartbeat(s) (raw {})", round + 1, hex(data));
+                            return Query::Reading(MouseState {
+                                name,
+                                percent: Some(p),
+                                charging,
+                                asleep: false,
+                                last_update: Some(crate::battery::now_ms()),
+                            });
+                        }
                     }
+                    Err(e) => tried.push(format!("id {id:02x}: {e}")),
                 }
-                Err(e) => tried.push(format!("id {id:02x}: {e}")),
             }
         }
-        Query::Asleep { name, detail: tried.join(" | ") }
+        Query::Asleep { name, detail: format!("after {HEARTBEATS} heartbeats: {}", tried.join(" | ")) }
     }
 }
 
@@ -212,7 +238,15 @@ mod tests {
         // Examples from Teristans/ajazz-aj179-battery-tray.
         assert_eq!(parse_frame(&[0x05, 0, 0, 0x38, 1, 0, 1, 2]), Some(56));
         assert_eq!(parse_frame(&[0x05, 0, 0, 0x64, 1, 1, 1, 2]), Some(100));
-        assert_eq!(parse_frame(&[0x00, 0x05, 0, 0, 0x1f, 1]), Some(31));
+        assert_eq!(parse_frame(&[0x00, 0x05, 0, 0, 0x1f, 1, 0, 1, 2]), Some(31));
+        // Real AJ179 PRO receiver on macOS, mouse link not ready (percent byte 0).
+        assert_eq!(parse_frame(&[0, 0, 0, 1, 0, 1, 2, 0, 0, 0]), None);
+        assert_eq!(parse_frame(&[0, 0, 0, 0, 1, 0, 1, 2, 0, 0]), None);
+        // The same two layouts with a real percent in place.
+        assert_eq!(parse_frame(&[0, 0, 0x4b, 1, 0, 1, 2, 0, 0, 0]), Some(75));
+        assert_eq!(parse_frame(&[0, 0, 0, 0x4b, 1, 0, 1, 2, 0, 0]), Some(75));
+        // 1 % must not be confused with the status block.
+        assert_eq!(parse_frame(&[0, 0, 0, 1, 1, 0, 1, 2, 0, 0]), Some(1));
         assert_eq!(parse_frame(&[0x05, 0, 0, 0, 0, 0]), None); // link not ready
         assert_eq!(parse_frame(&[0x05, 3, 0, 0x38]), None); // reconnect garbage
         assert_eq!(parse_frame(&[0x05, 0, 0, 0xff]), None);
