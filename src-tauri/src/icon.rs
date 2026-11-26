@@ -243,36 +243,207 @@ pub fn render(n: usize, text: &str, color: (u8, u8, u8), alpha: f32) -> Option<V
     Some(out)
 }
 
-/// macOS menu-bar image: purple duck headphones with the percentage beside it
-/// in white pixel text (e.g. "22%"). The menu bar shows icons 18 pt tall and
-/// keeps their aspect ratio, so this is a wide 36 px tall image (Retina).
-/// `alpha` < 1 dims the text (blink). Returns (straight RGBA, width, height).
+/// Artwork shown in the macOS menu bar.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub fn render_mac(text: &str, alpha: f32) -> Option<(Vec<u8>, usize, usize)> {
-    const H: usize = 36;
-    const K: usize = 3; // 5×7 font → 15×21 px glyphs
-    const GAP: usize = 6;
-    let a = mac_art()?;
-    let aw = ((H * a.w) as f32 / a.h as f32).round().max(1.0) as usize;
-    let art = downscale(a, aw, H);
+#[derive(Clone, Copy)]
+pub enum MacArt {
+    Headset,
+    Mouse,
+}
 
-    let tw = text_width(text) * K;
-    let w = aw + GAP + tw + 2;
-    let mut px = vec![[0f32; 4]; w * H];
-    for y in 0..H {
-        for x in 0..aw {
-            px[y * w + x] = art[y * aw + x];
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+static MOUSE_MAC_PNG: &[u8] = include_bytes!("../assets/mouse-mac.png");
+static MOUSE_ART: OnceLock<Option<Art>> = OnceLock::new();
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn mouse_art() -> Option<&'static Art> {
+    MOUSE_ART.get_or_init(|| load_art(MOUSE_MAC_PNG)).as_ref()
+}
+
+/// System UI font for the menu-bar text: San Francisco on macOS (as the clock
+/// uses), Helvetica as fallback; Segoe UI elsewhere (used for previews/tests).
+static UI_FONT: OnceLock<Option<ab_glyph::FontVec>> = OnceLock::new();
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn ui_font() -> Option<&'static ab_glyph::FontVec> {
+    use ab_glyph::{Font, VariableFont};
+    UI_FONT
+        .get_or_init(|| {
+            let win = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
+            let candidates = [
+                ("/System/Library/Fonts/SFNS.ttf".to_string(), 0),
+                ("/System/Library/Fonts/SFNSText.ttf".to_string(), 0),
+                ("/System/Library/Fonts/Helvetica.ttc".to_string(), 1), // index 1 = Bold
+                ("/Library/Fonts/Arial.ttf".to_string(), 0),
+                (format!(r"{win}\Fonts\segoeuisb.ttf"), 0),
+                (format!(r"{win}\Fonts\seguisb.ttf"), 0),
+                (format!(r"{win}\Fonts\segoeui.ttf"), 0),
+            ];
+            for (path, index) in candidates {
+                let Ok(bytes) = std::fs::read(&path) else { continue };
+                let font = ab_glyph::FontVec::try_from_vec_and_index(bytes.clone(), index)
+                    .or_else(|_| ab_glyph::FontVec::try_from_vec(bytes));
+                if let Ok(mut f) = font {
+                    // SF is a variable font: use a semibold weight like menu-bar text.
+                    let _ = f.set_variation(b"wght", 600.0);
+                    if f.glyph_id('0').0 != 0 {
+                        return Some(f);
+                    }
+                }
+            }
+            None
+        })
+        .as_ref()
+}
+
+/// Anti-aliased coverage of `text` drawn into a `w`×`h` map at x0, vertically
+/// centred on the digits. Returns the advance width used.
+fn draw_ui_text(cov: &mut [f32], w: usize, h: usize, font: &ab_glyph::FontVec, text: &str, size: f32, x0: f32) -> f32 {
+    use ab_glyph::{point, Font, PxScale, ScaleFont};
+    let scale = PxScale::from(size);
+    let sf = font.as_scaled(scale);
+    // Centre on the digit height so "%" and "?" do not shift the baseline.
+    let zero = font.outline_glyph(font.glyph_id('0').with_scale_and_position(scale, point(0.0, 0.0)));
+    let (top, bottom) = zero.map(|o| (o.px_bounds().min.y, o.px_bounds().max.y)).unwrap_or((-size * 0.7, 0.0));
+    let baseline = (h as f32 - (bottom - top)) / 2.0 - top;
+    let mut x = x0;
+    let mut prev = None;
+    for ch in text.chars() {
+        let id = font.glyph_id(ch);
+        if let Some(p) = prev {
+            x += sf.kern(p, id);
         }
+        let g = id.with_scale_and_position(scale, point(x, baseline.round()));
+        if let Some(o) = font.outline_glyph(g) {
+            let b = o.px_bounds();
+            o.draw(|gx, gy, c| {
+                let px = b.min.x as i32 + gx as i32;
+                let py = b.min.y as i32 + gy as i32;
+                if (0..w as i32).contains(&px) && (0..h as i32).contains(&py) {
+                    let i = py as usize * w + px as usize;
+                    cov[i] = (cov[i] + c).min(1.0);
+                }
+            });
+        }
+        x += sf.h_advance(id);
+        prev = Some(id);
     }
+    x - x0
+}
 
-    let text_mask = text_mask_at(w, H, text, K, aw + GAP, (H - 7 * K) / 2);
-    // Soft dark edge so white text stays readable on a light menu bar.
-    let shadow = dilate_rect(w, H, &text_mask, 1);
-    for i in 0..w * H {
-        if text_mask[i] {
-            px[i] = [alpha, alpha, alpha, alpha];
-        } else if shadow[i] {
-            px[i] = [0.0, 0.0, 0.0, 0.35];
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn ui_text_width(font: &ab_glyph::FontVec, text: &str, size: f32) -> f32 {
+    use ab_glyph::{Font, PxScale, ScaleFont};
+    let sf = font.as_scaled(PxScale::from(size));
+    let mut prev = None;
+    let mut x = 0.0;
+    for ch in text.chars() {
+        let id = font.glyph_id(ch);
+        if let Some(p) = prev {
+            x += sf.kern(p, id);
+        }
+        x += sf.h_advance(id);
+        prev = Some(id);
+    }
+    x
+}
+
+/// macOS menu-bar image: for each part, its purple artwork with the text
+/// (e.g. "22%") beside it in white system-font text. The menu bar shows icons
+/// 18 pt tall and keeps the aspect ratio, so this is a wide 36 px tall image
+/// (Retina). Each part has its own text alpha (< 1 = dimmed, for blinking).
+/// Returns (straight RGBA, width, height).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn render_mac(parts: &[(MacArt, &str, f32)]) -> Option<(Vec<u8>, usize, usize)> {
+    const H: usize = 36;
+    const FONT_PX: f32 = 26.0;
+    const ART_GAP: usize = 5; // artwork → text
+    const PART_GAP: usize = 16; // between headset and mouse
+    let font = ui_font();
+
+    // Layout pass.
+    struct Laid {
+        art: Vec<[f32; 4]>,
+        aw: usize,
+        ah: usize,
+        text_x: usize,
+        text_w: usize,
+    }
+    let mut laid = vec![];
+    let mut x = 0usize;
+    for (i, (kind, text, _)) in parts.iter().enumerate() {
+        if i > 0 {
+            x += PART_GAP;
+        }
+        let a = match kind {
+            MacArt::Headset => mac_art()?,
+            MacArt::Mouse => mouse_art()?,
+        };
+        // The mouse is tall: keep a little air above and below it.
+        let ah = match kind {
+            MacArt::Headset => H,
+            MacArt::Mouse => H - 4,
+        };
+        let aw = ((ah * a.w) as f32 / a.h as f32).round().max(1.0) as usize;
+        let art = downscale(a, aw, ah);
+        let text_x = x + aw + ART_GAP;
+        let text_w = match font {
+            Some(f) => ui_text_width(f, text, FONT_PX).ceil() as usize,
+            None => text_width(text) * 3,
+        };
+        laid.push(Laid { art, aw, ah, text_x, text_w });
+        x = text_x + text_w;
+    }
+    let w = x + 2;
+
+    // Paint pass.
+    let mut px = vec![[0f32; 4]; w * H];
+    let mut art_x = 0usize;
+    for (i, l) in laid.iter().enumerate() {
+        if i > 0 {
+            art_x = laid[i - 1].text_x + laid[i - 1].text_w + PART_GAP;
+        }
+        let oy = (H - l.ah) / 2;
+        for y in 0..l.ah {
+            for x in 0..l.aw {
+                px[(y + oy) * w + art_x + x] = l.art[y * l.aw + x];
+            }
+        }
+        let (_, text, alpha) = parts[i];
+        let mut cov = vec![0f32; w * H];
+        match font {
+            Some(f) => {
+                draw_ui_text(&mut cov, w, H, f, text, FONT_PX, l.text_x as f32);
+            }
+            None => {
+                let m = text_mask_at(w, H, text, 3, l.text_x, (H - 21) / 2);
+                for (c, on) in cov.iter_mut().zip(m) {
+                    if on {
+                        *c = 1.0;
+                    }
+                }
+            }
+        }
+        // White text with a soft dark edge so it stays readable on a light menu bar.
+        for y in 0..H {
+            for x in l.text_x.saturating_sub(2)..(l.text_x + l.text_w + 2).min(w) {
+                let i = y * w + x;
+                let mut edge = 0f32;
+                for (dx, dy) in [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)] {
+                    let (sx, sy) = (x as i32 + dx, y as i32 + dy);
+                    if (0..w as i32).contains(&sx) && (0..H as i32).contains(&sy) {
+                        edge = edge.max(cov[sy as usize * w + sx as usize]);
+                    }
+                }
+                let t = cov[i] * alpha;
+                let s = edge * 0.30 * (1.0 - cov[i]);
+                if t <= 0.0 && s <= 0.0 {
+                    continue;
+                }
+                // white text over shadow, premultiplied
+                let a = t + s * (1.0 - t);
+                px[i] = [t, t, t, a];
+            }
         }
     }
 
@@ -344,7 +515,7 @@ mod tests {
 mod mac_tests {
     // `image` is a dev-dependency for examples/clean_icon.rs only.
     use image as _;
-    use super::render_mac;
+    use super::{render_mac, MacArt};
 
     /// Writes target/icon-preview/mac.png: the menu-bar image (zoomed 4×) on a
     /// dark and a light menu bar.
@@ -352,12 +523,16 @@ mod mac_tests {
     fn preview_mac_png() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/icon-preview");
         std::fs::create_dir_all(&dir).unwrap();
-        let texts = ["22%", "100%", "7%", "?"];
+        let cases: Vec<Vec<(MacArt, &str, f32)>> = vec![
+            vec![(MacArt::Headset, "22%", 1.0)],
+            vec![(MacArt::Headset, "100%", 1.0), (MacArt::Mouse, "80%", 1.0)],
+            vec![(MacArt::Headset, "7%", 1.0), (MacArt::Mouse, "--", 1.0)],
+        ];
         let zoom = 4usize;
-        let renders: Vec<_> = texts.iter().map(|t| render_mac(t, 1.0).expect("artwork")).collect();
+        let renders: Vec<_> = cases.iter().map(|c| render_mac(c).expect("artwork")).collect();
         let cell_w = renders.iter().map(|r| r.1).max().unwrap() * zoom + 24;
         let cell_h = 36 * zoom + 24;
-        let (w, h) = (cell_w * texts.len(), cell_h * 2);
+        let (w, h) = (cell_w * cases.len(), cell_h * 2);
         let mut img = vec![0u8; w * h * 3];
         for (row, bg) in [(0usize, [0x1e, 0x1e, 0x22]), (1, [0xec, 0xec, 0xee])] {
             for (col, (px, iw, ih)) in renders.iter().enumerate() {

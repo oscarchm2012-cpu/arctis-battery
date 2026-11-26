@@ -64,9 +64,17 @@ pub fn icon_for(st: &BatteryState, pulse_phase: bool) -> Image<'static> {
     // macOS: purple ducks with the percentage beside them in white.
     #[cfg(target_os = "macos")]
     {
+        use crate::icon::MacArt;
         let _ = color;
         let label = if st.percent.is_some() { format!("{text}%") } else { text };
-        if let Some((px, w, h)) = crate::icon::render_mac(&label, alpha) {
+        let mut parts: Vec<(MacArt, String, f32)> = vec![(MacArt::Headset, label, alpha)];
+        // Ajazz mouse on its 2.4 GHz receiver: its own icon and percentage.
+        if let Some(m) = &st.mouse {
+            let t = m.percent.map(|p| format!("{p}%")).unwrap_or_else(|| "--".into());
+            parts.push((MacArt::Mouse, t, 1.0));
+        }
+        let parts: Vec<(MacArt, &str, f32)> = parts.iter().map(|(k, t, a)| (*k, t.as_str(), *a)).collect();
+        if let Some((px, w, h)) = crate::icon::render_mac(&parts) {
             return Image::new_owned(px, w as u32, h as u32);
         }
         let n = icon_px();
@@ -126,12 +134,23 @@ pub fn tooltip_for(st: &BatteryState) -> String {
         Some(n) => n.trim_start_matches("SteelSeries ").to_string(),
         None => "Arctis 3".to_string(),
     };
-    match (st.percent, st.connection.as_str()) {
+    let headset = match (st.percent, st.connection.as_str()) {
         (Some(p), _) => format!("SteelSeries {name} – Battery: {p}%"),
         (None, "notFound") => "SteelSeries Arctis – Headset not found".into(),
         (None, "disconnected") => format!("SteelSeries {name} – Disconnected"),
         _ if st.bluetooth == "off" => format!("SteelSeries {name} – Bluetooth is off"),
         _ => format!("SteelSeries {name} – Battery percentage unavailable"),
+    };
+    match &st.mouse {
+        Some(m) => {
+            let mouse = match (m.percent, m.asleep) {
+                (Some(p), false) => format!("{} – Battery: {p}%", m.name),
+                (Some(p), true) => format!("{} – Battery: {p}% (asleep)", m.name),
+                (None, _) => format!("{} – asleep, no reading yet", m.name),
+            };
+            format!("{headset}\n{mouse}")
+        }
+        None => headset,
     }
 }
 

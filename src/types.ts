@@ -8,6 +8,7 @@ export interface BatteryState {
   precision: string | null;
   charging: "charging" | "discharging" | "notReported";
   transport: "bluetooth" | "usbDongle" | null;
+  mouse: MouseState | null;
   lastUpdate: number | null;
   lastCheck: number;
 }
@@ -36,6 +37,7 @@ export interface Diagnostics {
   hfp: string;
   hid: string;
   hidDevices: string[];
+  mouse: string;
   log: string[];
 }
 
@@ -43,4 +45,12 @@ export interface SettingsView {
   notifications: boolean;
   autostart: boolean;
   version: string;
+}
+
+export interface MouseState {
+  name: string;
+  percent: number | null;
+  charging: boolean;
+  asleep: boolean;
+  lastUpdate: number | null;
 }

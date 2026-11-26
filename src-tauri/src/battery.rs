@@ -35,6 +35,8 @@ pub struct BatteryState {
     pub charging: String,
     /// "bluetooth" | "usbDongle"
     pub transport: Option<String>,
+    /// Ajazz AJ179 mouse on its 2.4 GHz receiver, if present.
+    pub mouse: Option<crate::mouse::MouseState>,
     /// Unix ms of the last successful battery read.
     pub last_update: Option<u64>,
     /// Unix ms of the last check (successful or not).
@@ -53,6 +55,7 @@ impl BatteryState {
             precision: None,
             charging: "notReported".into(),
             transport: None,
+            mouse: None,
             last_update: None,
             last_check: 0,
         }
@@ -101,6 +104,8 @@ pub struct Diagnostics {
     /// SteelSeries 2.4 GHz dongle (HID) status.
     pub hid: String,
     pub hid_devices: Vec<String>,
+    /// Ajazz mouse receiver status (incl. raw bytes).
+    pub mouse: String,
     pub log: Vec<String>,
 }
 

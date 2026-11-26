@@ -132,6 +132,8 @@ function DiagnosticsPanel() {
       <p>{d.gatt || "—"}</p>
       <h4>Hands-Free battery report</h4>
       <p>{d.hfp || "—"}</p>
+      <h4>Ajazz mouse receiver</h4>
+      <p>{d.mouse || "—"}</p>
       <h4>SteelSeries 2.4 GHz dongle</h4>
       <p>{d.hid || "—"}</p>
       {d.hidDevices.map((x) => (
@@ -252,6 +254,24 @@ export default function App() {
             <b>{ago(st?.lastUpdate ?? null, now)}</b>
           </div>
         </div>
+
+        {st?.mouse && (
+          <div className="mouse-card">
+            <div className="mouse-name">{st.mouse.name}</div>
+            <div className={`mouse-pct ${st.mouse.percent !== null ? levelClass(st.mouse.percent) : "none"}`}>
+              {st.mouse.percent !== null ? `${st.mouse.percent}%` : "—"}
+            </div>
+            <div className="mouse-sub">
+              {st.mouse.charging
+                ? "Charging (USB cable)"
+                : st.mouse.asleep
+                  ? st.mouse.percent !== null
+                    ? `Asleep · last read ${ago(st.mouse.lastUpdate, now).toLowerCase()}`
+                    : "Asleep · move the mouse to read the battery"
+                  : `2.4 GHz receiver · ${ago(st.mouse.lastUpdate, now).toLowerCase()}`}
+            </div>
+          </div>
+        )}
 
         {settings && (
           <div className="card">

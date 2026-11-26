@@ -5,6 +5,7 @@ mod hid;
 mod icon;
 #[cfg(target_os = "macos")]
 mod mac;
+mod mouse;
 mod settings;
 mod tray;
 
@@ -141,12 +142,18 @@ fn spawn_monitor(app: AppHandle) {
         .name("battery-monitor".into())
         .spawn(move || {
             let mut mon = battery::Monitor::new(tx);
+            let mut mouse = mouse::MouseSource::new();
             let mut alerts = Alerts { sent20: false, sent10: false };
             let mut full = true;
             loop {
-                let st = mon.read(full);
+                let mut st = mon.read(full);
+                st.mouse = mouse.read(full);
                 let s = app.state::<AppState>();
-                *s.diag.lock().unwrap() = mon.diag.clone();
+                {
+                    let mut d = mon.diag.clone();
+                    d.mouse = mouse.status.clone();
+                    *s.diag.lock().unwrap() = d;
+                }
                 let changed = {
                     let mut cur = s.battery.lock().unwrap();
                     let changed = !cur.same_reading(&st) || cur.last_check == 0;

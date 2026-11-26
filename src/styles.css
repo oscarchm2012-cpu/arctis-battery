@@ -367,3 +367,40 @@ footer {
 .link:hover {
   color: var(--orange);
 }
+
+/* Ajazz mouse */
+.mouse-card {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.mouse-name {
+  font-weight: 600;
+}
+.mouse-pct {
+  grid-row: span 2;
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.mouse-pct.green {
+  color: var(--green);
+}
+.mouse-pct.yellow {
+  color: var(--yellow);
+}
+.mouse-pct.red {
+  color: var(--red);
+}
+.mouse-sub {
+  color: var(--muted);
+  font-size: 11px;
+}
