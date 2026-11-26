@@ -59,10 +59,26 @@ pub fn icon_for(st: &BatteryState, pulse_phase: bool) -> Image<'static> {
         None if st.connection == "connected" => ("?".to_string(), GREY, false),
         None => ("-".to_string(), GREY, false),
     };
-    let n = icon_px();
-    let px = crate::icon::render(n, &text, color, if dim { 0.25 } else { 1.0 })
-        .unwrap_or_else(|| vec![0u8; n * n * 4]);
-    Image::new_owned(px, n as u32, n as u32)
+    let alpha = if dim { 0.25 } else { 1.0 };
+
+    // macOS: purple ducks with the percentage beside them in white.
+    #[cfg(target_os = "macos")]
+    {
+        let _ = color;
+        let label = if st.percent.is_some() { format!("{text}%") } else { text };
+        if let Some((px, w, h)) = crate::icon::render_mac(&label, alpha) {
+            return Image::new_owned(px, w as u32, h as u32);
+        }
+        let n = icon_px();
+        return Image::new_owned(vec![0u8; n * n * 4], n as u32, n as u32);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let n = icon_px();
+        let px = crate::icon::render(n, &text, color, alpha).unwrap_or_else(|| vec![0u8; n * n * 4]);
+        Image::new_owned(px, n as u32, n as u32)
+    }
 }
 
 // ---- keep the icon next to the arrow, not in the overflow -----------------
