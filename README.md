@@ -50,12 +50,13 @@ Connection and Bluetooth radio changes are event-driven; battery is re-read ever
 ## Ajazz AJ179 mouse
 
 If an Ajazz AJ179 (PRO / APEX) receiver is plugged in, its battery is shown in the window and, on
-macOS, as a mouse icon with the percentage next to the headset in the menu bar. Method (vendor
-heartbeat, per [Teristans/ajazz-aj179-battery-tray](https://github.com/Teristans/ajazz-aj179-battery-tray)):
-SET_FEATURE `00 F7 …` on usage page 0xFFFF / usage 0x02, then GET_FEATURE report 0x05 →
-percent before the `01 xx 01 02` status block (a short heartbeat burst, since the AJ179 PRO
-answers `00` = link not ready after a single poll). Read once a minute; a sleeping mouse keeps its last value for 30 min. The AJ179 PRO
-receiver (3151:402D) is not documented anywhere, so raw bytes are shown in the diagnostics panel.
+macOS, as a mouse icon with the percentage next to the headset in the menu bar. Receiver protocol as
+in [OpenMouse-Project/mouse-protocol](https://github.com/OpenMouse-Project/mouse-protocol) (AJ179 PRO,
+3151:402D) and [Teristans/ajazz-aj179-battery-tray](https://github.com/Teristans/ajazz-aj179-battery-tray)
+(APEX, 3151:5007): on usage page 0xFFFF / usage 0x02 send `F6 05` (select mouse), then `F7` status
+polls and GET_FEATURE → `[ready, kb battery, mouse battery %, kb online, mouse online (0 = yes),
+can send, 02]`. Read once a minute; a sleeping mouse keeps its last value for 30 min. The decoded
+status and raw bytes are shown in the diagnostics panel.
 
 ## macOS
 
