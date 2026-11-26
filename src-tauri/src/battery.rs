@@ -119,6 +119,9 @@ pub const HID_VENDOR: u16 = 0x1038;
 pub const HID_DEVICES: &[(u16, &str)] = &[
     (0x2269, "Arctis Nova 3P Wireless"),
     (0x226d, "Arctis Nova 3X Wireless"),
+    // Same protocol and offsets per HeadsetControl (steelseries_arctis_nova_5.hpp).
+    (0x2232, "Arctis Nova 5 Wireless"),
+    (0x2253, "Arctis Nova 5X Wireless"),
 ];
 
 /// Parses the dongle's reply to `00 B0`:
@@ -155,10 +158,10 @@ pub fn is_arctis3(name: &str) -> bool {
 }
 
 /// Headsets whose battery is read over Bluetooth: Arctis 3, and Arctis Nova 3P /
-/// 3X when used over Bluetooth instead of their 2.4 GHz dongle.
+/// 3X / 5 / 5X when used over Bluetooth instead of their 2.4 GHz dongle.
 pub fn is_supported_bt(name: &str) -> bool {
     let lower = name.to_lowercase();
-    is_arctis3(name) || lower.contains("nova 3p") || lower.contains("nova 3x")
+    is_arctis3(name) || lower.contains("nova 3p") || lower.contains("nova 3x") || lower.contains("nova 5")
 }
 
 /// Messages that wake the monitor thread.
@@ -789,6 +792,8 @@ mod tests {
         assert!(is_supported_bt("Arctis Nova 3X Wireless"));
         assert!(is_supported_bt("Arctis 3 Bluetooth"));
         assert!(!is_supported_bt("Arctis Nova 7"));
+        assert!(is_supported_bt("Arctis Nova 5"));
+        assert!(is_supported_bt("Arctis Nova 5X"));
         assert!(!is_supported_bt("Arctis Nova 3"));
     }
 }

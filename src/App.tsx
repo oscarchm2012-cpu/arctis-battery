@@ -85,8 +85,8 @@ function unavailableText(st: BatteryState | null): string {
   }
   if (st.connection === "disconnected")
     return st.transport === "usbDongle" ? "Headset is off" : "Headset disconnected";
-  if (st.bluetooth === "noAdapter" && st.connection === "notFound") return "No Arctis 3 / Nova 3P / 3X found";
-  if (st.connection === "notFound") return "No Arctis 3 / Nova 3P / 3X found";
+  if (st.bluetooth === "noAdapter" && st.connection === "notFound") return "No supported headset found";
+  if (st.connection === "notFound") return "No supported headset found";
   return "Battery percentage unavailable";
 }
 
@@ -152,7 +152,7 @@ function DiagnosticsPanel() {
           {x.name} <span className="muted">· {conn(x.connected)}</span>
         </p>
       ))}
-      <h4>Devices reporting battery to Windows</h4>
+      <h4>Devices reporting battery to the system</h4>
       {d.batteryNodes.length === 0 && <p className="muted">None</p>}
       {d.batteryNodes.map((x) => (
         <p key={x.instanceId} className={x.matched ? "hit" : ""}>

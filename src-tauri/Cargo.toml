@@ -1,6 +1,6 @@
 [package]
 name = "arctis-battery"
-version = "1.0.1"
+version = "1.0.2"
 description = "SteelSeries Arctis 3 Bluetooth battery monitor"
 edition = "2021"
 

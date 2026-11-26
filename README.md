@@ -1,7 +1,7 @@
 # Arctis Battery Monitor
 
 Tray / menu-bar app showing the real battery level of **SteelSeries Arctis 3 Bluetooth** and
-**Arctis Nova 3P / 3X Wireless** as a duck-headphones icon with the percentage.
+**Arctis Nova 3P / 3X / 5 / 5X Wireless** as a duck-headphones icon with the percentage.
 Tauri 2 + React + TypeScript + Rust.
 
 ## Download
@@ -24,7 +24,7 @@ No values are estimated or simulated. Sources, in order:
    Windows stores on the device node as `{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2`
    (the same number Settings › Bluetooth & devices shows). Usually in 10 % steps.
 
-3. **SteelSeries 2.4 GHz dongle (USB HID)** for Arctis Nova 3P / 3X Wireless (1038:2269 / 1038:226D):
+3. **SteelSeries 2.4 GHz dongle (USB HID)** for Arctis Nova 3P / 3X / 5 / 5X Wireless (1038:2269 / 226D / 2232 / 2253):
    request `00 B0` on interface 3 (usage page 0xFFC0); reply byte 1 = link (0x02 headset off),
    byte 3 = battery %, byte 4 = 0x01 charging. Used when no Arctis 3 is connected over Bluetooth.
    The dongle also carries the headset's audio, so it is queried gently: one request every 30 s,
