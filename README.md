@@ -8,8 +8,8 @@ Tauri 2 + React + TypeScript + Rust.
 
 **[Latest release](https://github.com/oscarchm2012-cpu/arctis-battery/releases/latest)**
 
-- Windows 10 / 11: [Arctis-Battery-Monitor-1.0.1-Windows-setup.exe](https://github.com/oscarchm2012-cpu/arctis-battery/releases/download/v1.0.1/Arctis-Battery-Monitor-1.0.1-Windows-setup.exe)
-- macOS 11+ (Apple Silicon and Intel): [Arctis-Battery-Monitor-1.0.1-macOS.dmg](https://github.com/oscarchm2012-cpu/arctis-battery/releases/download/v1.0.1/Arctis-Battery-Monitor-1.0.1-macOS.dmg)
+- Windows 10 / 11: [Arctis-Battery-Monitor-1.0.2-Windows-setup.exe](https://github.com/oscarchm2012-cpu/arctis-battery/releases/download/v1.0.2/Arctis-Battery-Monitor-1.0.2-Windows-setup.exe)
+- macOS 11+ (Apple Silicon and Intel): [Arctis-Battery-Monitor-1.0.2-macOS.dmg](https://github.com/oscarchm2012-cpu/arctis-battery/releases/download/v1.0.2/Arctis-Battery-Monitor-1.0.2-macOS.dmg)
 
 Not code-signed yet: on Windows click *More info → Run anyway* if SmartScreen appears; on macOS
 right-click the app → *Open* the first time.
